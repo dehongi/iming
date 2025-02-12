@@ -1,0 +1,267 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <div class="chat-container">
+    <div class="chat-sidebar">
+      <h3>Online Users</h3>
+      <ul id="online-users" class="user-list">
+        <!-- Online users will be populated here -->
+      </ul>
+    </div>
+
+    <div class="chat-main">
+      <div id="chat-messages" class="message-container">
+        <!-- Messages will be populated here -->
+      </div>
+
+      <div class="message-input">
+        <form id="message-form">
+          <input type="text" id="message-input" placeholder="Type your message..." />
+          <select id="message-recipient">
+            <option value="">Everyone</option>
+          </select>
+          <button type="submit">Send</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Get user information from the template
+    const currentUser = {
+      username: '{{ username }}',
+      id: '{{ user_id }}'
+    }
+    
+    let reconnectAttempts = 0
+    const maxReconnectAttempts = 5
+    const reconnectDelay = 3000 // 3 seconds
+    
+    function connectWebSocket() {
+      const wsScheme = window.location.protocol === 'https:' ? 'wss' : 'ws'
+      const chatSocket = new WebSocket(wsScheme + '://' + window.location.host + '/ws/chat/')
+    
+      chatSocket.onopen = function (e) {
+        console.log('WebSocket connection established')
+        reconnectAttempts = 0 // Reset reconnection attempts on successful connection
+        // Show connected status to user
+        displaySystemMessage('Connected to chat server')
+      }
+    
+      chatSocket.onerror = function (e) {
+        console.error('WebSocket error:', e)
+      }
+    
+      chatSocket.onmessage = function (e) {
+        console.log('Received message:', e.data)
+        const data = JSON.parse(e.data)
+    
+        if (data.type === 'status') {
+          handleUserStatus(data)
+        } else if (data.type === 'message') {
+          displayMessage(data)
+        }
+      }
+    
+      chatSocket.onclose = function (e) {
+        console.log('WebSocket connection closed')
+        if (reconnectAttempts < maxReconnectAttempts) {
+          displaySystemMessage('Connection lost. Reconnecting...')
+          setTimeout(function () {
+            reconnectAttempts++
+            connectWebSocket()
+          }, reconnectDelay)
+        } else {
+          displaySystemMessage('Unable to connect to chat server. Please refresh the page.')
+        }
+      }
+    
+      return chatSocket
+    }
+    
+    function displaySystemMessage(message) {
+      const messageDiv = document.createElement('div')
+      messageDiv.className = 'message system'
+      messageDiv.innerHTML = `
+            <span class="message-content">${message}</span>
+          `
+      messageContainer.appendChild(messageDiv)
+      messageContainer.scrollTop = messageContainer.scrollHeight
+    }
+    
+    const messageContainer = document.getElementById('chat-messages')
+    const onlineUsers = document.getElementById('online-users')
+    const messageForm = document.getElementById('message-form')
+    const messageInput = document.getElementById('message-input')
+    const recipientSelect = document.getElementById('message-recipient')
+    
+    // Track online users
+    const onlineUserSet = new Set()
+    
+    function handleUserStatus(data) {
+      if (data.status === 'online') {
+        if (!onlineUserSet.has(data.user) && data.user !== currentUser.username) {
+          onlineUserSet.add(data.user)
+          updateOnlineUsersList()
+        }
+      } else if (data.status === 'offline') {
+        onlineUserSet.delete(data.user)
+        updateOnlineUsersList()
+      }
+    }
+    
+    function updateOnlineUsersList() {
+      recipientSelect.innerHTML = '<option value="">Everyone</option>'
+      onlineUsers.innerHTML = ''
+    
+      onlineUserSet.forEach((username) => {
+        // Add to online users list
+        const userItem = document.createElement('li')
+        userItem.textContent = username
+        onlineUsers.appendChild(userItem)
+    
+        // Add to recipients dropdown
+        const option = document.createElement('option')
+        option.value = username
+        option.textContent = username
+        recipientSelect.appendChild(option)
+      })
+    }
+    
+    function displayMessage(data) {
+      const messageDiv = document.createElement('div')
+      messageDiv.className = `message ${data.sender === currentUser.username ? 'sent' : 'received'}`
+    
+      const timestamp = new Date(data.timestamp).toLocaleTimeString()
+      const isPrivate = data.is_private ? '(Private) ' : ''
+    
+      messageDiv.innerHTML = `
+                        <span class="message-header">
+                            ${isPrivate}${data.sender} - ${timestamp}
+                        </span>
+                        <span class="message-content">${data.message}</span>
+                    `
+    
+      messageContainer.appendChild(messageDiv)
+      messageContainer.scrollTop = messageContainer.scrollHeight
+    }
+    
+    messageForm.onsubmit = function (e) {
+      e.preventDefault()
+      const message = messageInput.value.trim()
+      const recipient = recipientSelect.value
+    
+      if (message) {
+        const messageData = {
+          type: 'message',
+          message: message
+        }
+    
+        if (recipient) {
+          messageData.recipient = recipient
+        }
+    
+        console.log('Sending message:', messageData)
+        chatSocket.send(JSON.stringify(messageData))
+        messageInput.value = ''
+      }
+    }
+    
+    // Initialize WebSocket connection
+    const chatSocket = connectWebSocket()
+  </script>
+
+  <style>
+    .chat-container {
+      display: flex;
+      height: 80vh;
+      margin: 20px;
+      border: 1px solid #ccc;
+    }
+    
+    .chat-sidebar {
+      width: 200px;
+      border-right: 1px solid #ccc;
+      padding: 10px;
+    }
+    
+    .chat-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .message-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+    }
+    
+    .message {
+      margin-bottom: 10px;
+      padding: 10px;
+      border-radius: 5px;
+    }
+    
+    .sent {
+      background-color: #e3f2fd;
+      margin-left: 20%;
+    }
+    
+    .received {
+      background-color: #f5f5f5;
+      margin-right: 20%;
+    }
+    
+    .message-header {
+      display: block;
+      font-size: 0.8em;
+      color: #666;
+      margin-bottom: 5px;
+    }
+    
+    .message-input {
+      padding: 20px;
+      border-top: 1px solid #ccc;
+    }
+    
+    .message-input form {
+      display: flex;
+      gap: 10px;
+    }
+    
+    .message-input input {
+      flex: 1;
+      padding: 8px;
+    }
+    
+    .user-list {
+      list-style: none;
+      padding: 0;
+    }
+    
+    .user-list li {
+      padding: 5px 0;
+    }
+    
+    .message.system {
+      background-color: #fff3cd;
+      color: #856404;
+      text-align: center;
+      margin: 10px 20%;
+      padding: 5px;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+    
+    .message-status {
+      font-size: 0.8em;
+      color: #666;
+      margin-top: 2px;
+    }
+    
+    .message.sent .message-status {
+      text-align: right;
+    }
+  </style>
+{% endblock %}

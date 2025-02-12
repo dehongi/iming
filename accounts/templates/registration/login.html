@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <div style="max-width: 400px; margin: 2rem auto; padding: 2rem; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+    <h2 style="text-align: center; margin-bottom: 2rem;">Log In</h2>
+
+    <form method="post">
+      {% csrf_token %}
+
+      {% for field in form %}
+        <div style="margin-bottom: 1rem;">
+          <label for="{{ field.id_for_label }}" style="display: block; margin-bottom: 0.5rem; font-weight: bold;">{{ field.label }}</label>
+          {{ field }}
+          {% if field.errors %}
+            {% for error in field.errors %}
+              <small style="color: #dc3545; display: block; margin-top: 0.25rem;">{{ error }}</small>
+            {% endfor %}
+          {% endif %}
+        </div>
+      {% endfor %}
+
+      {% if form.non_field_errors %}
+        {% for error in form.non_field_errors %}
+          <div style="color: #dc3545; margin-bottom: 1rem; text-align: center;">{{ error }}</div>
+        {% endfor %}
+      {% endif %}
+
+      <button type="submit" style="width: 100%; padding: 0.75rem; background: #2c3e50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 1rem;">Log In</button>
+    </form>
+
+    <div style="text-align: center; margin-top: 1rem;">
+      <p>
+        Don't have an account? <a href="{% url 'register' %}" style="color: #2c3e50;">Sign Up</a>
+      </p>
+    </div>
+  </div>
+{% endblock %}
